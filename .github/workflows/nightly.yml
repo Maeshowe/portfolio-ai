@@ -1,0 +1,59 @@
+name: nightly
+
+on:
+  schedule:
+    - cron: "30 3 * * *"    # 03:30 UTC (≈ 05:30 CET/CEST)
+  workflow_dispatch:        # manuális indítás
+
+jobs:
+  build-test-run:
+    runs-on: ubuntu-latest
+
+    env:                     # egy helyen legyen minden változó
+      PYTHON_VERSION: "3.11"
+      OUT_DIR: output/${{ github.run_attempt }}
+      POLYGON_KEY: ${{ secrets.POLYGON_KEY }}
+      FMP_KEY:     ${{ secrets.FMP_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: "pip"
+
+    - name: Install deps
+      run: pip install -r requirements.txt
+
+    # ──────────────── UNIT / PROPERTY TESTS ────────────────
+    - name: Run pytest (+ hypothesis)
+      run: pytest -q
+
+    # ──────────────── LIVE → OPTIMIZE → EXPLAIN ─────────────
+    - name: Run full pipeline
+      run: |
+        python -m src.main live \
+          --tickers $(cat tickers.txt) \
+          --roc_window 21 --top_pct 20 \
+          --out $OUT_DIR
+
+        python -m src.optimize \
+          --selected_csv $OUT_DIR/live_selected.csv \
+          --out          $OUT_DIR
+
+        python -m src.explain \
+          --selected_csv $OUT_DIR/live_selected.csv \
+          --weights      $OUT_DIR/weights.json \
+          --out          $OUT_DIR
+
+    # ──────────────── ARTEFAKT MENTÉSE ────────────────
+    - name: Upload portfolio artefacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: portfolio-${{ github.run_id }}
+        path: ${{ env.OUT_DIR }}
+        retention-days: 14   # automatikus törlés 2 hét után

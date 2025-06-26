@@ -1,0 +1,14 @@
+python-dotenv
+pandas
+requests
+polygon-api-client
+financialmodelingprep-python
+fredapi
+openai
+PyPortfolioOpt
+scipy
+shap
+xgboost
+matplotlib
+pytest
+hypothesis
